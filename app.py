@@ -158,7 +158,7 @@ def view_task(task_name):
     iliauni_students = []
     gepi_students = []
 
-    if task_name == "ანალიტიკა":
+    if task_name in ["ანალიტიკა", "ადმინისტრირება"]:
         all_students = []
         for u_name, u_info in USERS_DATABASE.items():
             if u_info.get("role") == "student":
@@ -258,6 +258,70 @@ def add_student():
         }
 
     return redirect(url_for('view_task', task_name="ადმინისტრირება"))
+
+# --- წაშლის ახალი მექანიზმები (სახელი, გვარი, ნუმერაცია და სრული) ---
+@app.route('/admin/delete_student_individual', methods=['POST'])
+def delete_student_individual():
+    if session.get('role') == 'admin':
+        university = request.form.get('university')
+        first_name_query = request.form.get('first_name', '').strip().lower()
+        last_name_query = request.form.get('last_name', '').strip().lower()
+        index_query = request.form.get('student_index', '').strip()
+        
+        matching_students = []
+        for u_name, u_info in USERS_DATABASE.items():
+            if u_info.get('role') == 'student' and u_info.get('university') == university:
+                f_name = u_info.get('first_name', '').strip().lower()
+                l_name = u_info.get('last_name', '').strip().lower()
+                
+                if f_name == first_name_query and l_name == last_name_query:
+                    matching_students.append(u_name)
+        
+        target_username = None
+        if matching_students:
+            if index_query.isdigit():
+                idx = int(index_query) - 1
+                if 0 <= idx < len(matching_students):
+                    target_username = matching_students[idx]
+            else:
+                target_username = matching_students[0] # თუ ნუმერაცია არ მიუთითა, იღებს პირველს
+        
+        if target_username and target_username in USERS_DATABASE:
+            del USERS_DATABASE[target_username]
+            keys_to_del = [k for k in COMPLETED_TESTS.keys() if k[0] == target_username]
+            for k in keys_to_del:
+                del COMPLETED_TESTS[k]
+                
+        return redirect(url_for('view_task', task_name="ადმინისტრირება"))
+    return redirect(url_for('home'))
+
+@app.route('/admin/delete_student/<path:username>')
+def delete_student_direct(username):
+    if session.get('role') == 'admin':
+        if username in USERS_DATABASE and USERS_DATABASE[username].get('role') == 'student':
+            del USERS_DATABASE[username]
+            keys_to_del = [k for k in COMPLETED_TESTS.keys() if k[0] == username]
+            for k in keys_to_del:
+                del COMPLETED_TESTS[k]
+        return redirect(url_for('view_task', task_name="ანალიტიკა"))
+    return redirect(url_for('home'))
+
+@app.route('/admin/delete_students_bulk', methods=['POST'])
+def delete_students_bulk():
+    if session.get('role') == 'admin':
+        university = request.form.get('university')
+        
+        student_keys = [u for u, info in USERS_DATABASE.items() if info.get('role') == 'student' and info.get('university') == university]
+        
+        for u in student_keys:
+            del USERS_DATABASE[u]
+            keys_to_del = [k for k in COMPLETED_TESTS.keys() if k[0] == u]
+            for k in keys_to_del:
+                del COMPLETED_TESTS[k]
+                
+        return redirect(url_for('view_task', task_name="ადმინისტრირება"))
+    return redirect(url_for('home'))
+# ------------------------------------------------------------------
 
 @app.route('/submit', methods=['POST'])
 def submit():
